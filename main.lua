@@ -4,150 +4,145 @@ local RS = game:GetService("RunService")
 local TS = game:GetService("TweenService")
 local Mouse = LP:GetMouse()
 
-local ScreenGui = Instance.new("ScreenGui", LP.PlayerGui)
-ScreenGui.Name = "Venom_V18_Final"
-ScreenGui.ResetOnSpawn = false
-
--- Хранилище
+-- Хранилище настроек
 _G.Flags = {}
 _G.SavedPos = nil
 
--- ГЛАВНОЕ ОКНО (Glassmorphism)
-local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 620, 0, 430)
-Main.Position = UDim2.new(0.5, -310, 0.5, -215)
-Main.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
-Main.BackgroundTransparency = 0.15
-Main.BorderSizePixel = 0
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
-
-local Stroke = Instance.new("UIStroke", Main)
-Stroke.Thickness = 1.5
-Stroke.Color = Color3.fromRGB(0, 255, 150)
-Stroke.Transparency = 0.3
-
--- САЙДБАР (Скролл вкладок)
-local Sidebar = Instance.new("ScrollingFrame", Main)
-Sidebar.Size = UDim2.new(0, 160, 1, -20)
-Sidebar.Position = UDim2.new(0, 10, 0, 10)
-Sidebar.BackgroundTransparency = 1
-Sidebar.CanvasSize = UDim2.new(0, 0, 1.2, 0)
-Sidebar.ScrollBarThickness = 0
-local SideLayout = Instance.new("UIListLayout", Sidebar)
-SideLayout.Padding = UDim.new(0, 6)
-
-local Container = Instance.new("Frame", Main)
-Container.Size = UDim2.new(1, -190, 1, -20)
-Container.Position = UDim2.new(0, 180, 0, 10)
-Container.BackgroundTransparency = 1
-
-local Pages = {}
-
--- Создание плавающей кнопки для мобайл
-local function CreateFloat(name, callback)
-    local F = Instance.new("TextButton", ScreenGui)
-    F.Size = UDim2.new(0, 90, 0, 35)
-    F.Position = UDim2.new(0.2, 0, 0.2, 0)
-    F.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    F.BackgroundTransparency = 0.2
-    F.Text = name
-    F.TextColor3 = Color3.fromRGB(0, 255, 150)
-    F.Font = "GothamBold"
-    F.TextSize = 11
-    F.Visible = false
-    Instance.new("UICorner", F).CornerRadius = UDim.new(0, 8)
-    Instance.new("UIStroke", F).Color = Color3.fromRGB(0, 255, 150)
-
-    -- Dragging
-    local dragStart, startPos, dragging
-    F.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = F.Position
-        end
-    end)
-    F.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            F.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    F.InputEnded:Connect(function() dragging = false end)
-    F.MouseButton1Click:Connect(callback)
-    return F
+-- Функция плавной анимации
+local function Animate(obj, info, goal)
+    TS:Create(obj, TweenInfo.new(info, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal):Play()
 end
 
-local function AddPage(name)
-    local P = Instance.new("ScrollingFrame", Container)
-    P.Size = UDim2.new(1, 0, 1, 0)
-    P.BackgroundTransparency = 1
-    P.Visible = false
-    P.ScrollBarThickness = 0
-    Instance.new("UIListLayout", P).Padding = UDim.new(0, 8)
+-- ==========================================
+-- 1. СИСТЕМА ПЛАВАЮЩИХ КНОПОК (ЧИТАБЕЛЬНЫЕ)
+-- ==========================================
+local function CreateMobileBind(name, callback, isToggle)
+    local BindGui = Instance.new("ScreenGui", LP.PlayerGui)
+    BindGui.Name = "Bind_" .. name
     
-    local B = Instance.new("TextButton", Sidebar)
-    B.Size = UDim2.new(1, -10, 0, 38)
-    B.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    B.Text = name
-    B.TextColor3 = Color3.fromRGB(200, 200, 200)
-    B.Font = "GothamBold"
-    Instance.new("UICorner", B)
+    local BButton = Instance.new("TextButton", BindGui)
+    BButton.Size = UDim2.new(0, 70, 0, 70)
+    BButton.Position = UDim2.new(0.1, 0, 0.5, 0)
+    BButton.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    BButton.BackgroundTransparency = 0.2
+    BButton.Text = string.sub(name, 1, 5):upper()
+    BButton.TextColor3 = Color3.new(1, 1, 1)
+    BButton.Font = "GothamBold"
+    BButton.TextSize = 14
     
-    B.MouseButton1Click:Connect(function()
-        for _,pg in pairs(Pages) do pg.Visible = false end
-        for _,btn in pairs(Sidebar:GetChildren()) do if btn:IsA("TextButton") then btn.TextColor3 = Color3.fromRGB(200,200,200) end end
-        P.Visible = true
-        B.TextColor3 = Color3.fromRGB(0, 255, 150)
+    local BStroke = Instance.new("UIStroke", BButton)
+    BStroke.Color = Color3.fromRGB(0, 255, 150)
+    BStroke.Thickness = 2
+    
+    Instance.new("UICorner", BButton).CornerRadius = UDim.new(0, 15)
+
+    -- Dragging Logic
+    local dS, sP, dG;
+    BButton.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dG = true; dS = i.Position; sP = BButton.Position
+        end
     end)
-    Pages[name] = P
-    return P
-end
+    UIS.InputChanged:Connect(function(i)
+        if dG and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - dS
+            BButton.Position = UDim2.new(sP.X.Scale, sP.X.Offset + d.X, sP.Y.Scale, sP.Y.Offset + d.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function() dG = false end)
 
--- Кнопка (Функция)
-local function AddFunc(page, name, isToggle, callback)
-    local Frame = Instance.new("Frame", page)
-    Frame.Size = UDim2.new(1, -5, 0, 45)
-    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Frame.BackgroundTransparency = 0.6
-    Instance.new("UICorner", Frame)
-
-    local MainBtn = Instance.new("TextButton", Frame)
-    MainBtn.Size = UDim2.new(0.75, 0, 1, 0)
-    MainBtn.BackgroundTransparency = 1
-    MainBtn.Text = "  " .. name .. (isToggle and ": OFF" or "")
-    MainBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    MainBtn.Font = "Gotham"
-    MainBtn.TextXAlignment = "Left"
-    MainBtn.TextSize = 13
-
-    local float = CreateFloat(name, function()
+    BButton.MouseButton1Click:Connect(function()
         if isToggle then
             _G.Flags[name] = not _G.Flags[name]
-            MainBtn.Text = "  " .. name .. ": " .. (_G.Flags[name] and "ON" or "OFF")
+            Animate(BButton, 0.3, {TextColor3 = _G.Flags[name] and Color3.fromRGB(0, 255, 150) or Color3.new(1,1,1)})
             callback(_G.Flags[name])
         else
             callback()
         end
     end)
+    return BindGui
+end
 
-    local Pin = Instance.new("TextButton", Frame)
-    Pin.Size = UDim2.new(0.2, 0, 0.7, 0)
-    Pin.Position = UDim2.new(0.78, 0, 0.15, 0)
-    Pin.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    Pin.Text = "PIN"
-    Pin.Font = "GothamBold"
-    Pin.TextSize = 10
-    Pin.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Instance.new("UICorner", Pin)
+-- ==========================================
+-- 2. ГЛАВНЫЙ ИНТЕРФЕЙС (PREMIUM GLASS)
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui", LP.PlayerGui)
+ScreenGui.Name = "Venom_Ultimate_V18"
+ScreenGui.ResetOnSpawn = false
 
-    Pin.MouseButton1Click:Connect(function()
-        float.Visible = not float.Visible
-        Pin.BackgroundColor3 = float.Visible and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(45, 45, 45)
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 750, 0, 500)
+Main.Position = UDim2.new(0.5, -375, 0.5, -250)
+Main.BackgroundColor3 = Color3.fromRGB(13, 13, 15)
+Main.BorderSizePixel = 0
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 20)
+
+local MStroke = Instance.new("UIStroke", Main)
+MStroke.Color = Color3.fromRGB(0, 255, 150)
+MStroke.Thickness = 1.5; MStroke.Transparency = 0.4
+
+-- Шапка (Header)
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 70); Header.BackgroundTransparency = 1
+local Title = Instance.new("TextLabel", Header)
+Title.Size = UDim2.new(0, 300, 1, 0); Title.Position = UDim2.new(0, 25, 0, 0); Title.Text = "VENOM V18 ULTIMATE"; Title.TextColor3 = Color3.fromRGB(0, 255, 150); Title.Font = "GothamBold"; Title.TextSize = 24; Title.TextXAlignment = "Left"; Title.BackgroundTransparency = 1
+
+local Close = Instance.new("TextButton", Header)
+Close.Size = UDim2.new(0, 40, 0, 40); Close.Position = UDim2.new(1, -50, 0.5, -20); Close.BackgroundColor3 = Color3.fromRGB(255, 65, 65); Close.Text = "×"; Close.TextColor3 = Color3.new(1,1,1); Close.TextSize = 30; Close.Font = "GothamBold"; Instance.new("UICorner", Close).CornerRadius = UDim.new(1, 0)
+Close.MouseButton1Click:Connect(function() ScreenGui.Enabled = false end)
+
+-- Сайдбар (Sidebar)
+local Sidebar = Instance.new("ScrollingFrame", Main)
+Sidebar.Size = UDim2.new(0, 190, 1, -90); Sidebar.Position = UDim2.new(0, 15, 0, 75); Sidebar.BackgroundTransparency = 1; Sidebar.ScrollBarThickness = 0
+Instance.new("UIListLayout", Sidebar).Padding = UDim.new(0, 10)
+
+-- Контейнер страниц
+local Container = Instance.new("Frame", Main)
+Container.Size = UDim2.new(1, -240, 1, -90); Container.Position = UDim2.new(0, 220, 0, 75); Container.BackgroundTransparency = 1
+local Pages = {}
+
+local function AddPage(name)
+    local P = Instance.new("ScrollingFrame", Container)
+    P.Size = UDim2.new(1, 0, 1, 0); P.BackgroundTransparency = 1; P.Visible = false; P.ScrollBarThickness = 2; P.CanvasSize = UDim2.new(0, 0, 3, 0)
+    Instance.new("UIListLayout", P).Padding = UDim.new(0, 12)
+    
+    local B = Instance.new("TextButton", Sidebar)
+    B.Size = UDim2.new(1, -10, 0, 50); B.BackgroundColor3 = Color3.fromRGB(25, 25, 30); B.Text = name; B.TextColor3 = Color3.fromRGB(160, 160, 160); B.Font = "GothamBold"; B.TextSize = 14; Instance.new("UICorner", B)
+    
+    B.MouseButton1Click:Connect(function()
+        for _,pg in pairs(Pages) do pg.Visible = false end; P.Visible = true
+        for _,btn in pairs(Sidebar:GetChildren()) do if btn:IsA("TextButton") then btn.TextColor3 = Color3.fromRGB(160, 160, 160) end end
+        B.TextColor3 = Color3.fromRGB(0, 255, 150)
+    end)
+    Pages[name] = P; return P
+end
+
+local function AddFunc(page, name, isToggle, callback)
+    local Frame = Instance.new("Frame", page)
+    Frame.Size = UDim2.new(1, -15, 0, 75); Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35); Frame.BorderSizePixel = 0; Instance.new("UICorner", Frame)
+    
+    local Indicator = Instance.new("Frame", Frame) -- Та самая неоновая полоска
+    Indicator.Size = UDim2.new(0, 6, 0, 35); Indicator.Position = UDim2.new(0, 0, 0.5, -17.5); Indicator.BackgroundColor3 = Color3.fromRGB(200, 50, 50); Instance.new("UICorner", Indicator)
+
+    local MainBtn = Instance.new("TextButton", Frame)
+    MainBtn.Size = UDim2.new(0.65, 0, 1, 0); MainBtn.BackgroundTransparency = 1; MainBtn.Text = "     " .. name; MainBtn.TextColor3 = Color3.new(1,1,1); MainBtn.Font = "GothamBold"; MainBtn.TextSize = 16; MainBtn.TextXAlignment = "Left"
+
+    local BindBtn = Instance.new("TextButton", Frame)
+    BindBtn.Size = UDim2.new(0, 85, 0, 35); BindBtn.Position = UDim2.new(1, -95, 0.5, -17.5); BindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55); BindBtn.Text = "BIND"; BindBtn.TextColor3 = Color3.new(1,1,1); BindBtn.Font = "GothamBold"; BindBtn.TextSize = 12; Instance.new("UICorner", BindBtn)
+    
+    local bindGui = nil
+    BindBtn.MouseButton1Click:Connect(function()
+        if not bindGui then
+            bindGui = CreateMobileBind(name, callback, isToggle); BindBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 150); BindBtn.TextColor3 = Color3.new(0,0,0)
+        else
+            bindGui:Destroy(); bindGui = nil; BindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55); BindBtn.TextColor3 = Color3.new(1,1,1)
+        end
     end)
 
     MainBtn.MouseButton1Click:Connect(function()
         if isToggle then
             _G.Flags[name] = not _G.Flags[name]
-            MainBtn.Text = "  " .. name .. ": " .. (_G.Flags[name] and "ON" or "OFF")
+            Animate(Indicator, 0.3, {BackgroundColor3 = _G.Flags[name] and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(200, 50, 50)})
             callback(_G.Flags[name])
         else
             callback()
@@ -156,100 +151,86 @@ local function AddFunc(page, name, isToggle, callback)
 end
 
 -- ==========================================
--- КАТЕГОРИИ И ФУНКЦИИ
+-- КАТЕГОРИИ И ВСЕ ФУНКЦИИ
 -- ==========================================
+local Comb = AddPage("COMBAT")
+AddFunc(Comb, "Anti-Knockback", true, function(v) _G.AntiKB = v end)
+AddFunc(Comb, "Kill Aura", true, function(v) _G.Aura = v end)
+AddFunc(Comb, "Hitbox Head", true, function(v) _G.Hitbox = v end)
+AddFunc(Comb, "Auto-Clicker", true, function(v) _G.AC = v end)
 
-local Combat = AddPage("Combat")
-AddFunc(Combat, "Anti-Knockback", true, function(v) _G.AntiKB = v end)
-AddFunc(Combat, "Auto-Clicker", true, function(v) _G.AC = v end)
-AddFunc(Combat, "Kill Aura (Legit)", true, function(v) _G.Aura = v end)
-AddFunc(Combat, "Reach (Melee)", true, function(v) _G.Reach = v end)
-AddFunc(Combat, "Hitbox Head", true, function(v) 
-    for _,p in pairs(game.Players:GetPlayers()) do if p.Character then p.Character.Head.Size = v and Vector3.new(4,4,4) or Vector3.new(1,1,1) end end
-end)
-
-local Move = AddPage("Movement")
-AddFunc(Move, "Noclip", true, function(v) _G.Noclip = v end)
-AddFunc(Move, "Infinite Jump", true, function(v) _G.InfJ = v end)
-AddFunc(Move, "Fly (Hold E)", true, function(v) _G.Fly = v end)
+local Move = AddPage("MOVEMENT")
+AddFunc(Move, "Noclip Master", true, function(v) _G.Noclip = v end)
+AddFunc(Move, "Fly V2 (Hold)", true, function(v) _G.Fly = v end)
 AddFunc(Move, "Speed Hack (100)", true, function(v) LP.Character.Humanoid.WalkSpeed = v and 100 or 16 end)
 AddFunc(Move, "Jump Power (200)", true, function(v) LP.Character.Humanoid.JumpPower = v and 200 or 50 end)
-AddFunc(Move, "No-Slowdown", true, function(v) _G.NoSlow = v end)
-AddFunc(Move, "Spider-Man", true, function(v) _G.Spider = v end)
+AddFunc(Move, "Infinite Jump", true, function(v) _G.InfJ = v end)
+AddFunc(Move, "Gravity Switch", true, function(v) workspace.Gravity = v and 40 or 196.2 end)
 
-local TP = AddPage("Teleports")
-AddFunc(TP, "Save Position", false, function() _G.SavedPos = LP.Character.HumanoidRootPart.CFrame; print("Saved!") end)
-AddFunc(TP, "TP to Saved", false, function() if _G.SavedPos then LP.Character.HumanoidRootPart.CFrame = _G.SavedPos end end)
-AddFunc(TP, "Click TP (Ctrl)", true, function(v) _G.ClickTP = v end)
-AddFunc(TP, "TP to Random Player", false, function() 
-    local plrs = game.Players:GetPlayers()
-    local r = plrs[math.random(1, #plrs)]
-    LP.Character.HumanoidRootPart.CFrame = r.Character.HumanoidRootPart.CFrame
+local Tele = AddPage("TELEPORTS")
+AddFunc(Tele, "Save Position", false, function() _G.SavedPos = LP.Character.HumanoidRootPart.CFrame end)
+AddFunc(Tele, "TP to Saved", false, function() if _G.SavedPos then LP.Character.HumanoidRootPart.CFrame = _G.SavedPos end end)
+AddFunc(Tele, "Click TP (Ctrl)", true, function(v) _G.ClickTP = v end)
+AddFunc(Tele, "TP Destiny (Kick)", false, function() if _G.SavedPos then LP.Character.HumanoidRootPart.CFrame = _G.SavedPos; task.wait(5); LP:Kick("Destiny TP") end end)
+
+local Visu = AddPage("VISUALS")
+AddFunc(Visu, "Box ESP 2D", true, function(v)
+    _G.BoxESP = v
+    task.spawn(function()
+        while _G.BoxESP do
+            for _, p in pairs(game.Players:GetPlayers()) do
+                if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and not p.Character:FindFirstChild("VenomBox") then
+                    local bg = Instance.new("BillboardGui", p.Character); bg.Name = "VenomBox"; bg.AlwaysOnTop = true; bg.Size = UDim2.new(4, 0, 5.5, 0)
+                    local fr = Instance.new("Frame", bg); fr.Size = UDim2.new(1, 0, 1, 0); fr.BackgroundTransparency = 1; local st = Instance.new("UIStroke", fr); st.Color = Color3.fromRGB(0, 255, 150); st.Thickness = 2
+                end
+            end
+            task.wait(1)
+        end
+        for _, p in pairs(game.Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("VenomBox") then p.Character.VenomBox:Destroy() end end
+    end)
 end)
+AddFunc(Visu, "Fullbright", true, function(v) game.Lighting.Brightness = v and 4 or 2 end)
+AddFunc(Visu, "FOV 120", true, function(v) workspace.CurrentCamera.FieldOfView = v and 120 or 70 end)
 
-local Visuals = AddPage("Visuals")
-AddFunc(Visuals, "ESP Highlight", true, function(v) _G.ESP = v end)
-AddFunc(Visuals, "Fullbright", true, function(v) game.Lighting.Brightness = v and 4 or 2 end)
-AddFunc(Visuals, "Remove Textures", false, function() for _,v in pairs(workspace:GetDescendants()) do if v:IsA("BasePart") then v.Material = "SmoothPlastic" end end end)
-AddFunc(Visuals, "Third Person", true, function(v) LP.CameraMaxZoomDistance = v and 100 or 12.8 end)
-AddFunc(Visuals, "Rainbow Character", true, function(v) _G.Rainbow = v end)
-
-local Misc = AddPage("Misc")
-AddFunc(Misc, "Anti-AFK", true, function() LP.Idled:Connect(function() game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame) end) end)
-AddFunc(Misc, "Rejoin Server", false, function() game:GetService("TeleportService"):Teleport(game.PlaceId, LP) end)
+local Misc = AddPage("MISC")
+AddFunc(Misc, "Fast Steal (Instant)", true, function(v) _G.FastSteal = v end)
 AddFunc(Misc, "Infinite Yield", false, function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end)
-AddFunc(Misc, "Reset Character", false, function() LP.Character:BreakJoints() end)
-AddFunc(Misc, "Server Hop", false, function() end)
+AddFunc(Misc, "Rejoin Server", false, function() game:GetService("TeleportService"):Teleport(game.PlaceId, LP) end)
 
 -- ==========================================
--- ЛОГИКА (RunService)
+-- ОСНОВНАЯ ЛОГИКА ОБРАБОТКИ
 -- ==========================================
-
 RS.Stepped:Connect(function()
-    if _G.Noclip and LP.Character then
-        for _,v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-    end
+    -- Anti-Knockback (Original)
     if _G.AntiKB and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
         local r = LP.Character.HumanoidRootPart
         r.AssemblyLinearVelocity = Vector3.new(0, UIS:IsKeyDown(Enum.KeyCode.Space) and r.AssemblyLinearVelocity.Y or 0, 0)
         r.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end
-    if _G.Fly and LP.Character and UIS:IsKeyDown(Enum.KeyCode.E) then
-        LP.Character.HumanoidRootPart.Velocity = Vector3.new(0, 50, 0)
+    -- Noclip
+    if _G.Noclip and LP.Character then
+        for _,v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
+    -- Hitbox
+    if _G.Hitbox then
+        for _,p in pairs(game.Players:GetPlayers()) do
+            if p ~= LP and p.Character and p.Character:FindFirstChild("Head") then p.Character.Head.Size = Vector3.new(4,4,4); p.Character.Head.CanCollide = false end
+        end
+    end
+    -- Fly
+    if _G.Fly and LP.Character then LP.Character.HumanoidRootPart.Velocity = Vector3.new(0, 50, 0) end
+    -- Fast Steal
+    if _G.FastSteal then for _,p in pairs(workspace:GetDescendants()) do if p:IsA("ProximityPrompt") then p.HoldDuration = 0 end end end
 end)
 
 UIS.JumpRequest:Connect(function() if _G.InfJ then LP.Character.Humanoid:ChangeState("Jumping") end end)
 
-UIS.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Insert then ScreenGui.Enabled = not ScreenGui.Enabled end
-    if _G.ClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 and UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
-        LP.Character.HumanoidRootPart.CFrame = CFrame.new(Mouse.Hit.p + Vector3.new(0,3,0))
-    end
-end)
+-- Меню на Insert
+UIS.InputBegan:Connect(function(input) if input.KeyCode == Enum.KeyCode.Insert then ScreenGui.Enabled = not ScreenGui.Enabled end end)
 
--- Автокликер
-RS.RenderStepped:Connect(function()
-    if _G.AC then
-        local t = LP.Character:FindFirstChildOfClass("Tool")
-        if t then t:Activate() end
-    end
-end)
+-- Drag Main Menu
+local dS, sP, dG; Main.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dG=true; dS=i.Position; sP=Main.Position end end)
+UIS.InputChanged:Connect(function(i) if dG and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then local d=i.Position-dS; Main.Position=UDim2.new(sP.X.Scale, sP.X.Offset+d.X, sP.Y.Scale, sP.Y.Offset+d.Y) end end)
+UIS.InputEnded:Connect(function() dG = false end)
 
--- Драг меню
-local dStart, sPos, dragging
-Main.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true; dStart = input.Position; sPos = Main.Position
-    end
-end)
-UIS.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dStart
-        Main.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + delta.X, sPos.Y.Scale, sPos.Y.Offset + delta.Y)
-    end
-end)
-UIS.InputEnded:Connect(function() dragging = false end)
-
-Pages["Combat"].Visible = true
-print("Venom V18 Loaded! Mobile & PC support active.")
+Pages["COMBAT"].Visible = true
